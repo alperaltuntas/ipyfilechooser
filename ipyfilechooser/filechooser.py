@@ -7,12 +7,17 @@ from .errors import ParentPathError, InvalidFileNameError
 from .utils import get_subpaths, get_dir_contents, match_item, strip_parent_path
 from .utils import is_valid_filename, get_drive_letters, normalize_path, has_parent_path
 
+from traitlets import Unicode
 
 class FileChooser(VBox, ValueWidget):
     """FileChooser class."""
 
     _LBL_TEMPLATE = '<span style="color:{1};">{0}</span>'
     _LBL_NOFILE = 'No selection'
+
+    value = Unicode(allow_none=True)
+
+    from traitlets import Unicode
 
     def __init__(
             self,
@@ -340,6 +345,8 @@ class FileChooser(VBox, ValueWidget):
         self._selected_path = self._expand_path(self._pathlist.value)
         self._selected_filename = self._filename.value
 
+        self.value = os.path.join(self._selected_path, self._selected_filename)
+
         if ((self._selected_path is not None) and (self._selected_filename is not None)):
             selected = os.path.join(self._selected_path, self._selected_filename)
             self._gb.layout.display = 'none'
@@ -393,6 +400,8 @@ class FileChooser(VBox, ValueWidget):
         # Remove selection
         self._selected_path = None
         self._selected_filename = None
+
+        self.value = os.path.join(self._selected_path, self._selected_filename)
 
         # Hide dialog and cancel button
         self._gb.layout.display = 'none'
@@ -568,11 +577,6 @@ class FileChooser(VBox, ValueWidget):
         """Set file name filter pattern."""
         self._filter_pattern = filter_pattern
         self.refresh()
-
-    @property
-    def value(self) -> Optional[str]:
-        """Get selected value."""
-        return self.selected
 
     @property
     def selected(self) -> Optional[str]:
