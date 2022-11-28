@@ -34,6 +34,8 @@ class FileChooser(VBox, ValueWidget):
             filter_pattern: Optional[Sequence[str]] = None,
             sandbox_path: Optional[str] = None,
             layout: Layout = Layout(width='500px'),
+            existing_only: bool = False,
+            new_only: bool = False,
             **kwargs):
         """Initialize FileChooser object."""
         # Check if path and sandbox_path align
@@ -59,6 +61,11 @@ class FileChooser(VBox, ValueWidget):
         self._sandbox_path = normalize_path(sandbox_path) if sandbox_path is not None else None
         self._callback: Optional[Callable] = None
 
+        if existing_only==True and new_only==True:
+            raise RuntimeError("Cannot set both existing_only and new_only to True.")
+        self._existing_only = existing_only
+        self._new_only = new_only
+
         # Widgets
         self._pathlist = Dropdown(
             description="",
@@ -68,7 +75,7 @@ class FileChooser(VBox, ValueWidget):
             )
         )
         self._filename = Text(
-            placeholder='output filename',
+            placeholder='file name',
             layout=Layout(
                 width='auto',
                 grid_area='filename',
@@ -76,6 +83,11 @@ class FileChooser(VBox, ValueWidget):
             ),
             disabled=self._show_only_dirs
         )
+        if self._existing_only:
+            self._filename.placeholder = "Type existing filename"
+        if self._new_only:
+            self._filename.placeholder = "Type new filename"
+
         self._dircontent = Select(
             rows=8,
             layout=Layout(
@@ -345,7 +357,25 @@ class FileChooser(VBox, ValueWidget):
         self._selected_path = self._expand_path(self._pathlist.value)
         self._selected_filename = self._filename.value
 
-        self.value = os.path.join(self._selected_path, self._selected_filename)
+        if self._selected_filename in [None, '']:
+            self._label.value = self._LBL_TEMPLATE.format("<b>Provide file name!!!</b>", "red")
+            self.value = None            
+            return
+        else:
+            value = os.path.join(self._selected_path, self._selected_filename)
+            if self._existing_only and not os.path.exists(value):
+                self._label.value = self._LBL_TEMPLATE.format("<b>File not found!!!</b>", "red")
+                self._filename.value = ''
+                self._selected_filename = ''
+                self.value = None
+                return
+            elif self._new_only and os.path.exists(value):
+                self._label.value = self._LBL_TEMPLATE.format(f"<b>File {self._selected_filename} already exists!!!</b>", "red")
+                self._filename.value = ''
+                self._selected_filename = ''
+                self.value = None
+                return
+            self.value = value
 
         if ((self._selected_path is not None) and (self._selected_filename is not None)):
             selected = os.path.join(self._selected_path, self._selected_filename)
@@ -354,10 +384,7 @@ class FileChooser(VBox, ValueWidget):
             self._select.description = self._change_desc
             self._select.disabled = False
 
-            if os.path.isfile(selected):
-                self._label.value = self._LBL_TEMPLATE.format(self._restrict_path(selected), 'orange')
-            else:
-                self._label.value = self._LBL_TEMPLATE.format(self._restrict_path(selected), 'green')
+            self._label.value = self._LBL_TEMPLATE.format(self._restrict_path(selected), 'green')
 
     def _on_cancel_click(self, _b) -> None:
         """Handle cancel button clicks."""
@@ -400,8 +427,7 @@ class FileChooser(VBox, ValueWidget):
         # Remove selection
         self._selected_path = None
         self._selected_filename = None
-
-        self.value = os.path.join(self._selected_path, self._selected_filename)
+        self.value = None
 
         # Hide dialog and cancel button
         self._gb.layout.display = 'none'
