@@ -7,7 +7,7 @@ from .errors import ParentPathError, InvalidFileNameError
 from .utils import get_subpaths, get_dir_contents, match_item, strip_parent_path
 from .utils import is_valid_filename, get_drive_letters, normalize_path, has_parent_path
 
-from traitlets import Unicode
+from traitlets import Unicode, validate
 
 class FileChooser(VBox, ValueWidget):
     """FileChooser class."""
@@ -16,8 +16,6 @@ class FileChooser(VBox, ValueWidget):
     _LBL_NOFILE = 'No selection'
 
     value = Unicode(allow_none=True)
-
-    from traitlets import Unicode
 
     def __init__(
             self,
@@ -178,6 +176,21 @@ class FileChooser(VBox, ValueWidget):
             layout=layout,
             **kwargs
         )
+
+    @validate("value")
+    def _validate_value(self, proposal):
+
+        new_val = proposal["value"]
+
+        path, filename = os.path.split(new_val)
+        status = self._check_selection(path, filename)
+        if status is False:
+            return
+
+        self._set_form_values(path, filename)
+        self._apply_selection(check_selection=False, set_value_trait=False)
+
+        return new_val
 
     def _set_form_values(self, path: str, filename: str) -> None:
         """Set the form values."""
@@ -351,34 +364,51 @@ class FileChooser(VBox, ValueWidget):
             filename = self._default_filename
 
         self._set_form_values(path, filename)
+    
+    def _check_selection(self, path, filename):
 
-    def _apply_selection(self) -> None:
+        if not os.path.exists(path):
+            raise RuntimeError(f"Path {path} doesn't exist")
+
+        if not is_valid_filename(filename):
+            raise InvalidFileNameError(filename)
+        
+        status, err_msg = True, ''
+
+        if filename in [None, '']:
+            status = False
+            err_msg = "Provide file name!!!"
+        else:
+            value = os.path.join(path, filename)
+            if self._existing_only and not os.path.exists(value):
+                status = False
+                err_msg = "File not found!!!"
+            elif self._new_only and os.path.exists(value):
+                status = False
+                err_msg = f"File {filename} already exists!!!"
+
+        if status is False:
+            self._filename.value = ''
+            self._selected_filename = ''
+            self.value = None
+            self._label.value = self._LBL_TEMPLATE.format(f"<b>{err_msg}<rb>", "red")
+
+        return status
+
+    def _apply_selection(self, check_selection=True, set_value_trait=True) -> None:
         """Close the dialog and apply the selection."""
         self._selected_path = self._expand_path(self._pathlist.value)
         self._selected_filename = self._filename.value
 
-        if self._selected_filename in [None, '']:
-            self._label.value = self._LBL_TEMPLATE.format("<b>Provide file name!!!</b>", "red")
-            self.value = None            
-            return
-        else:
-            value = os.path.join(self._selected_path, self._selected_filename)
-            if self._existing_only and not os.path.exists(value):
-                self._label.value = self._LBL_TEMPLATE.format("<b>File not found!!!</b>", "red")
-                self._filename.value = ''
-                self._selected_filename = ''
-                self.value = None
+        if check_selection is True:
+            status = self._check_selection(self._selected_path, self._selected_filename)
+            if status is False:
                 return
-            elif self._new_only and os.path.exists(value):
-                self._label.value = self._LBL_TEMPLATE.format(f"<b>File {self._selected_filename} already exists!!!</b>", "red")
-                self._filename.value = ''
-                self._selected_filename = ''
-                self.value = None
-                return
-            self.value = value
 
         if ((self._selected_path is not None) and (self._selected_filename is not None)):
             selected = os.path.join(self._selected_path, self._selected_filename)
+            if set_value_trait is True:
+                self.value = selected   
             self._gb.layout.display = 'none'
             self._cancel.layout.display = 'none'
             self._select.description = self._change_desc
