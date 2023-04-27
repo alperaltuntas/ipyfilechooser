@@ -690,3 +690,10 @@ class FileChooser(VBox, ValueWidget):
     def get_interact_value(self) -> Optional[str]:
         """Return the value which should be passed to interactive functions."""
         return self.selected
+
+    def disable(self):
+        self.reset()
+        self._select.disabled = True
+
+    def enable(self):
+        self._select.disabled = False
