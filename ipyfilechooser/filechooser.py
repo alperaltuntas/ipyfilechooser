@@ -34,6 +34,7 @@ class FileChooser(VBox, ValueWidget):
             layout: Layout = Layout(width='500px'),
             existing_only: bool = False,
             new_only: bool = False,
+            filename_placeholder: str = None,
             **kwargs):
         """Initialize FileChooser object."""
         # Check if path and sandbox_path align
@@ -85,6 +86,8 @@ class FileChooser(VBox, ValueWidget):
             self._filename.placeholder = "Type existing filename"
         if self._new_only:
             self._filename.placeholder = "Type new filename"
+        if filename_placeholder is not None:
+            self._filename.placeholder = filename_placeholder
 
         self._dircontent = Select(
             rows=8,
