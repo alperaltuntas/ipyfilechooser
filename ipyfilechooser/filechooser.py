@@ -66,11 +66,11 @@ class FileChooser(VBox, ValueWidget):
         self._new_only = new_only
 
         # Widgets
-        self._pathlist = Dropdown(
+        self._pathtext = Text(
             description="",
             layout=Layout(
                 width='auto',
-                grid_area='pathlist'
+                grid_area='pathtext'
             )
         )
         self._filename = Text(
@@ -119,7 +119,7 @@ class FileChooser(VBox, ValueWidget):
             self._title.layout.display = 'none'
 
         # Widget observe handlers
-        self._pathlist.observe(self._on_pathlist_select, names='value')
+        self._pathtext.observe(self._on_pathtext_select, names='value')
         self._dircontent.observe(self._on_dircontent_select, names='value')
         self._filename.observe(self._on_filename_change, names='value')
         self._select.on_click(self._on_select_click)
@@ -136,7 +136,7 @@ class FileChooser(VBox, ValueWidget):
         # Layout
         self._gb = GridBox(
             children=[
-                self._pathlist,
+                self._pathtext,
                 self._filename,
                 self._dircontent
             ],
@@ -147,9 +147,9 @@ class FileChooser(VBox, ValueWidget):
                 grid_template_rows='auto auto',
                 grid_template_columns='60% 40%',
                 grid_template_areas='''
-                    'pathlist {}'
+                    'pathtext {}'
                     'dircontent dircontent'
-                    '''.format(('filename', 'pathlist')[self._show_only_dirs])
+                    '''.format(('filename', 'pathtext')[self._show_only_dirs])
             )
         )
 
@@ -203,17 +203,27 @@ class FileChooser(VBox, ValueWidget):
 
         # Disable triggers to prevent selecting an entry in the Select
         # box from automatically triggering a new event.
-        self._pathlist.unobserve(self._on_pathlist_select, names='value')
+        self._pathtext.unobserve(self._on_pathtext_select, names='value')
         self._dircontent.unobserve(self._on_dircontent_select, names='value')
         self._filename.unobserve(self._on_filename_change, names='value')
+
+        # In folder only mode zero out the filename
+        if self._show_only_dirs:
+            filename = ''
 
         try:
             # Fail early if the folder can not be read
             _ = os.listdir(path)
-
-            # In folder only mode zero out the filename
-            if self._show_only_dirs:
-                filename = ''
+        except FileNotFoundError:
+            self._dircontent.value = None
+            self._dircontent.options = ()
+            self._select.disabled = True
+        except PermissionError:
+            # Deselect the unreadable folder and generate a warning
+            self._dircontent.value = None
+            warnings.warn(f'Permission denied for {path}', RuntimeWarning)
+        else:
+            self._select.disabled = False
 
             # Set form values
             restricted_path = self._restrict_path(path)
@@ -224,8 +234,7 @@ class FileChooser(VBox, ValueWidget):
                 drives = get_drive_letters()
                 subpaths.extend(list(set(drives) - set(subpaths)))
 
-            self._pathlist.options = subpaths
-            self._pathlist.value = restricted_path
+            self._pathtext.value = restricted_path
             self._filename.value = filename
 
             # file/folder real names
@@ -300,24 +309,20 @@ class FileChooser(VBox, ValueWidget):
                     self._select.disabled = True
                 else:
                     self._select.disabled = False
-        except PermissionError:
-            # Deselect the unreadable folder and generate a warning
-            self._dircontent.value = None
-            warnings.warn(f'Permission denied for {path}', RuntimeWarning)
 
         # Reenable triggers
-        self._pathlist.observe(self._on_pathlist_select, names='value')
+        self._pathtext.observe(self._on_pathtext_select, names='value')
         self._dircontent.observe(self._on_dircontent_select, names='value')
         self._filename.observe(self._on_filename_change, names='value')
 
-    def _on_pathlist_select(self, change: Mapping[str, str]) -> None:
+    def _on_pathtext_select(self, change: Mapping[str, str]) -> None:
         """Handle selecting a path entry."""
         self._set_form_values(self._expand_path(change['new']), self._filename.value)
 
     def _on_dircontent_select(self, change: Mapping[str, str]) -> None:
         """Handle selecting a folder entry."""
         new_path = os.path.realpath(os.path.join(
-            self._expand_path(self._pathlist.value),
+            self._expand_path(self._pathtext.value),
             self._map_disp_to_name[change['new']]
         ))
 
@@ -326,14 +331,14 @@ class FileChooser(VBox, ValueWidget):
             path = new_path
             filename = self._filename.value
         else:
-            path = self._expand_path(self._pathlist.value)
+            path = self._expand_path(self._pathtext.value)
             filename = self._map_disp_to_name[change['new']]
 
         self._set_form_values(path, filename)
 
     def _on_filename_change(self, change: Mapping[str, str]) -> None:
         """Handle filename field changes."""
-        self._set_form_values(self._expand_path(self._pathlist.value), change['new'])
+        self._set_form_values(self._expand_path(self._pathtext.value), change['new'])
 
     def _on_select_click(self, _b) -> None:
         """Handle select button clicks."""
@@ -400,7 +405,7 @@ class FileChooser(VBox, ValueWidget):
 
     def _apply_selection(self, check_selection=True, set_value_trait=True) -> None:
         """Close the dialog and apply the selection."""
-        self._selected_path = self._expand_path(self._pathlist.value)
+        self._selected_path = self._expand_path(self._pathtext.value)
         self._selected_filename = self._filename.value
 
         if check_selection is True:
@@ -485,7 +490,7 @@ class FileChooser(VBox, ValueWidget):
 
     def refresh(self) -> None:
         """Re-render the form."""
-        self._set_form_values(self._expand_path(self._pathlist.value), self._filename.value)
+        self._set_form_values(self._expand_path(self._pathtext.value), self._filename.value)
 
     @property
     def show_hidden(self) -> bool:
@@ -578,7 +583,7 @@ class FileChooser(VBox, ValueWidget):
             raise InvalidFileNameError(filename)
 
         self._default_filename = filename
-        self._set_form_values(self._expand_path(self._pathlist.value), self._default_filename)
+        self._set_form_values(self._expand_path(self._pathtext.value), self._default_filename)
 
     @property
     def sandbox_path(self) -> Optional[str]:
@@ -611,7 +616,7 @@ class FileChooser(VBox, ValueWidget):
         self._filename.disabled = self._show_only_dirs
         self._filename.layout.display = (None, "none")[self._show_only_dirs]
         self._gb.layout.children = [
-            self._pathlist,
+            self._pathtext,
             self._dircontent
         ]
 
@@ -619,9 +624,9 @@ class FileChooser(VBox, ValueWidget):
             self._gb.layout.children.insert(1, self._filename)
 
         self._gb.layout.grid_template_areas = '''
-            'pathlist {}'
+            'pathtext {}'
             'dircontent dircontent'
-            '''.format(('filename', 'pathlist')[self._show_only_dirs])
+            '''.format(('filename', 'pathtext')[self._show_only_dirs])
 
         # Reset the dialog
         self.reset()
