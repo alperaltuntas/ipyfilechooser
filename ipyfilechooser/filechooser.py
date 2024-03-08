@@ -214,7 +214,7 @@ class FileChooser(VBox, ValueWidget):
         try:
             # Fail early if the folder can not be read
             _ = os.listdir(path)
-        except FileNotFoundError:
+        except (FileNotFoundError, NotADirectoryError) as e:
             self._dircontent.value = None
             self._dircontent.options = ()
             self._select.disabled = True
@@ -247,41 +247,49 @@ class FileChooser(VBox, ValueWidget):
                 top_path=self._sandbox_path
             )
 
-            # file/folder display names
-            dircontent_display_names = get_dir_contents(
-                path,
-                show_hidden=self._show_hidden,
-                show_only_dirs=self._show_only_dirs,
-                dir_icon=self._dir_icon,
-                dir_icon_append=self._dir_icon_append,
-                filter_pattern=self._filter_pattern,
-                top_path=self._sandbox_path
-            )
-
-            # Dict to map real names to display names
-            self._map_name_to_disp = {
-                real_name: disp_name
-                for real_name, disp_name in zip(
-                    dircontent_real_names,
-                    dircontent_display_names
-                )
-            }
-
-            # Dict to map display names to real names
-            self._map_disp_to_name = {
-                disp_name: real_name
-                for real_name, disp_name in self._map_name_to_disp.items()
-            }
-
             # Set _dircontent form value to display names
-            self._dircontent.options = dircontent_display_names
-
-            # If the value in the filename Text box equals a value in the
-            # Select box and the entry is a file then select the entry.
-            if ((filename in dircontent_real_names) and os.path.isfile(os.path.join(path, filename))):
-                self._dircontent.value = self._map_name_to_disp[filename]
-            else:
+            if len(dircontent_real_names) > 500:
+                # If too many files to display, don't bother displaying them
+                self._map_disp_to_name = {}
+                self._dircontent.disabled = True
+                self._dircontent.options = ["Too many files to display. You may manually type in a path to navigate."]
                 self._dircontent.value = None
+            else:
+                # file/folder display names
+                dircontent_display_names = get_dir_contents(
+                    path,
+                    show_hidden=self._show_hidden,
+                    show_only_dirs=self._show_only_dirs,
+                    dir_icon=self._dir_icon,
+                    dir_icon_append=self._dir_icon_append,
+                    filter_pattern=self._filter_pattern,
+                    top_path=self._sandbox_path
+                )
+
+                # Dict to map real names to display names
+                map_name_to_disp = {
+                    real_name: disp_name
+                    for real_name, disp_name in zip(
+                        dircontent_real_names,
+                        dircontent_display_names
+                    )
+                }
+
+                # Dict to map display names to real names
+                self._map_disp_to_name = {
+                    disp_name: real_name
+                    for real_name, disp_name in map_name_to_disp.items()
+                }
+
+                self._dircontent.disabled = False
+                self._dircontent.options = dircontent_display_names
+
+                # If the value in the filename Text box equals a value in the
+                # Select box and the entry is a file then select the entry.
+                if ((filename in dircontent_real_names) and os.path.isfile(os.path.join(path, filename))):
+                    self._dircontent.value = map_name_to_disp[filename]
+                else:
+                    self._dircontent.value = None
 
             # Update the state of the select button
             if self._gb.layout.display is None:
@@ -317,6 +325,8 @@ class FileChooser(VBox, ValueWidget):
 
     def _on_pathtext_select(self, change: Mapping[str, str]) -> None:
         """Handle selecting a path entry."""
+        new_path = self._expand_path(change['new'])
+
         self._set_form_values(self._expand_path(change['new']), self._filename.value)
 
     def _on_dircontent_select(self, change: Mapping[str, str]) -> None:
@@ -356,6 +366,9 @@ class FileChooser(VBox, ValueWidget):
                 except TypeError:
                     # Support previous behaviour of not passing self
                     self._callback()
+        # acquire and release _property_lock to signal frontend update
+        self._property_lock = {"value": self.value}
+        self._property_lock = {}
 
     def _show_dialog(self) -> None:
         """Show the dialog."""
@@ -696,9 +709,18 @@ class FileChooser(VBox, ValueWidget):
         """Return the value which should be passed to interactive functions."""
         return self.selected
 
+    @property
+    def disabled(self):
+        return self._select.disabled
+    
+    @disabled.setter
+    def disabled(self, value):
+        """Disable the widget, but unlike the below disable() method, do not reset."""
+        self._select.disabled = value
+
     def disable(self):
         self.reset()
-        self._select.disabled = True
+        self.disabled = True
 
     def enable(self):
-        self._select.disabled = False
+        self.disabled = False
