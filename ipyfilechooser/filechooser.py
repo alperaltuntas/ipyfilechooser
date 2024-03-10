@@ -7,7 +7,7 @@ from .errors import ParentPathError, InvalidFileNameError
 from .utils import get_subpaths, get_dir_contents, match_item, strip_parent_path
 from .utils import is_valid_filename, get_drive_letters, normalize_path, has_parent_path
 
-from traitlets import Unicode, validate
+from traitlets import Unicode, validate, observe
 
 class FileChooser(VBox, ValueWidget):
     """FileChooser class."""
@@ -90,7 +90,7 @@ class FileChooser(VBox, ValueWidget):
             self._filename.placeholder = filename_placeholder
 
         self._dircontent = Select(
-            rows=8,
+            rows=7,
             layout=Layout(
                 width='auto',
                 grid_area='dircontent'
@@ -194,6 +194,11 @@ class FileChooser(VBox, ValueWidget):
         self._apply_selection(check_selection=False, set_value_trait=False)
 
         return new_val
+
+    @observe("value")
+    def _observe_value(self, change):
+        if change["new"] is None:
+            self.reset()
 
     def _set_form_values(self, path: str, filename: str) -> None:
         """Set the form values."""
