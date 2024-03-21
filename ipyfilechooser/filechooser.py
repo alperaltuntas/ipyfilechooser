@@ -13,7 +13,7 @@ class FileChooser(VBox, ValueWidget):
     """FileChooser class."""
 
     _LBL_TEMPLATE = '<span style="color:{1};">{0}</span>'
-    _LBL_NOFILE = 'No selection'
+    _LBL_NOFILE = '<span style="color:red">No selection made yet</span>'
 
     value = Unicode(allow_none=True)
 
