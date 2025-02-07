@@ -393,6 +393,9 @@ class FileChooser(VBox, ValueWidget):
     
     def _check_selection(self, path, filename):
 
+        if filename == "TBD":
+            return
+        
         if not os.path.exists(path):
             raise RuntimeError(f"Path {path} doesn't exist")
 
